@@ -1,0 +1,118 @@
+K3s Cluster Setup with AWS Cloud Provider
+
+
+Precautions:
+
+- Any other security group should not have this same tag “kubernetes.io/cluster/mycluster” and Value: “owned”. For other clusters change mycluster value.
+
+- For AWS LB’s to work you must have at least 1 worker Node.
+(By default AWS LB routes traffic to only worker nodes not master)
+
+STEPS:
+
+Create role for master and slave
+https://kubernetes.github.io/cloud-provider-aws/prerequisites/
+
+Create SG: Allow Traffic for self
+Use this SG for Master as well for Workers
+
+Tag VPC, Subnets, SG & instance also which is to be used with Key: “kubernetes.io/cluster/mycluster” and Value: “owned”
+
+kubens- set namespace
+
+all subnte => kubernetes.io/cluster/eks-ayush = owned
+private-subnet => kubernetes.io/role/internal-elb = 1
+public subnet => kubernetes.io/role/elb =1
+https://docs.aws.amazon.com/eks/latest/userguide/alb-ingress.html
+
+Launch instance for K3s master/Control Plane
+
+- Attach respective IAM Role
+- Use same VPC and Public subnet
+- AMI Ubuntu 22
+- Security group 
+- USER DATA:
+*** You can generate a token on your system and then use it in place of K3S_TOKEN
+
+
+k3s master
+
+#!/bin/bash
+
+apt-get update -y
+apt-get upgrade -y
+
+local_ip=$(curl -s http://169.254.169.254/latest/meta-data/local-ipv4)
+provider_id="$(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)/$(curl -s http://169.254.169.254/latest/meta-data/instance-id)"
+
+instance_id=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)
+
+CUR_HOSTNAME=$(cat /etc/hostname)
+NEW_HOSTNAME=$instance_id
+
+hostnamectl set-hostname $NEW_HOSTNAME
+hostname $NEW_HOSTNAME
+sudo sed -i "s/$CUR_HOSTNAME/$NEW_HOSTNAME/g" /etc/hosts
+sudo sed -i "s/$CUR_HOSTNAME/$NEW_HOSTNAME/g" /etc/hostname
+
+curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION=v1.23.9+k3s1 K3S_TOKEN=coIeS98V5UxzKYTLX0Uzzd4pkxfPSwBxiCUFtUm1sURd66mnZlT3uhk sh -s - --cluster-init --node-ip $local_ip --advertise-address $local_ip  --kubelet-arg="cloud-provider=external" --flannel-backend=none  --disable-cloud-controller --disable=servicelb --disable=traefik --write-kubeconfig-mode 644 --kubelet-arg="provider-id=aws:///$provider_id"
+
+kubectl apply -f https://github.com/aws/aws-node-termination-handler/releases/download/v1.13.3/all-resources.yaml
+kubectl apply -f https://raw.githubusercontent.com/rahul-yadav-hub/K3s-aws/main/aws/rbac.yml
+kubectl apply -f https://raw.githubusercontent.com/rahul-yadav-hub/K3s-aws/main/aws/aws-cloud-controller-manager-daemonset.yml
+kubectl apply -f https://docs.projectcalico.org/manifests/calico.yaml
+
+    -  Launch instance for K3s Worker Node
+            - Attach respective IAM Role
+            - Use same VPC and Public subnet
+            - AMI Ubuntu 22
+- Security group 
+- USER DATA:
+
+
+
+
+k3s worker
+
+#!/bin/bash
+
+apt-get update
+apt-get upgrade -y
+
+local_ip=$(curl -s http://169.254.169.254/latest/meta-data/local-ipv4)
+flannel_iface=$(ip -4 route ls | grep default | grep -Po '(?<=dev )(\S+)')
+provider_id="$(curl -s http://169.254.169.254/latest/meta-data/placement/availability-zone)/$(curl -s http://169.254.169.254/latest/meta-data/instance-id)"
+instance_id="$(curl -s http://169.254.169.254/latest/meta-data/instance-id)"
+
+CUR_HOSTNAME=$(cat /etc/hostname)
+NEW_HOSTNAME=$instance_id
+
+hostnamectl set-hostname $NEW_HOSTNAME
+hostname $NEW_HOSTNAME
+
+sudo sed -i "s/$CUR_HOSTNAME/$NEW_HOSTNAME/g" /etc/hosts
+sudo sed -i "s/$CUR_HOSTNAME/$NEW_HOSTNAME/g" /etc/hostname
+
+curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION=v1.23.9+k3s1 K3S_TOKEN=coIeS98V5UxzKYTLX0Uzzd4pkxfPSwBxiCUFtUm1sURd66mnZlT3uhk K3S_URL=https://10.0.1.177:6443 sh -s - agent --node-ip $local_ip  --kubelet-arg="provider-id=aws:///$provider_id"
+
+
+
+Perform following after the cluster setup:
+- SSH into the master and check whether cluster and nodes are ready
+  “kubectl get nodes”
+
+
+- Clear Ram buffer/cache (Free up Ram)
+Run as root user
+  “sync; echo > 3 /proc/sys/vm/drop_caches”
+
+Cluster is tested for followings:
+External cloud provider integration (AWS)
+Nginx ingress with AWS LB
+Service Type LB
+Dynamic PV creation 
+
+Issues and Solution:
+Fails to pull image from private ECR repo (401: Unauthorized access)
+SOL: https://medium.com/@danieltse/pull-the-docker-image-from-aws-ecr-in-kubernetes-dc7280d74904
+
