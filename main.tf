@@ -1,16 +1,19 @@
 locals {
-  private_ip_master = "${module.k3sMaster_instance.private_ip}"
+  private_ip_master = module.k3sMaster_instance.private_ip
 }
 
-resource "aws_security_group" "sg-k3s" {
-  name        = "allow_tls"
-  vpc_id      = "vpc-015507e5299f6073c"
-  ingress {
-    description      = "TLS from VPC"
-    from_port        = 0
-    to_port          = 0
-    protocol         = "tcp"
-    cidr_blocks      = ["0.0.0.0/0"]
+resource "aws_security_group" "k3s-sg" {
+  name   = "aadesh-k3s-sg"
+  vpc_id = "vpc-015507e5299f6073c"
+  
+  dynamic "ingress" {
+    for_each = var.k3s_inbound_ports
+    content {
+      from_port   = ingress.value.internal
+      to_port     = ingress.value.external
+      protocol    = ingress.value.protocol
+      cidr_blocks = [ingress.value.cidrBlock]
+    }
   }
 
   egress {
@@ -18,45 +21,45 @@ resource "aws_security_group" "sg-k3s" {
     to_port          = 0
     protocol         = "-1"
     cidr_blocks      = ["0.0.0.0/0"]
-    ipv6_cidr_blocks = ["::/0"]
   }
 
   tags = {
-    Name = "allow_tls"
+    Name = "aadesh-k3s-sg"
   }
 }
+
 module "k3sMaster_instance" {
   source  = "terraform-aws-modules/ec2-instance/aws"
   version = "~> 3.0"
 
-  name = "MasterInstance"
+  name = "aadesh-k3s-master"
 
-  ami                    = "ami-0ecc74eca1d66d8a6"
+  ami                    = "ami-0530ca8899fac469f"
   instance_type          = "t3a.medium"
-  key_name               = "ayush-squareops"
+  key_name               = "aadesh"
   monitoring             = true
-  vpc_security_group_ids = [aws_security_group.sg-k3s.id]
+  vpc_security_group_ids = [aws_security_group.k3s-sg.id]
   subnet_id              = "subnet-00614134196ed093d"
-  user_data = "${file("k3sMaster.sh")}"
+  user_data              = file("k3s_Master.sh")
   tags = {
-    "kubernetes.io/cluster/mycluster"   = "owned"   
+    "kubernetes.io/cluster/k3s-aadesh" = "owned"
   }
 }
 
 module "k3sWorker_instance" {
-#   count = var.MasterCount
+  # count = var.MasterCount
   source  = "terraform-aws-modules/ec2-instance/aws"
   version = "~> 3.0"
 
-  name = "WorkerInstance"
+  name = "aadesh-k3s-worker"
 
-  ami                    = "ami-0ecc74eca1d66d8a6"
+  ami                    = "ami-0530ca8899fac469f"
   instance_type          = "t3a.medium"
-  key_name               = "ayush-squareops"
+  key_name               = "aadesh"
   monitoring             = true
-  vpc_security_group_ids = [aws_security_group.sg-k3s.id]
+  vpc_security_group_ids = [aws_security_group.k3s-sg.id]
   subnet_id              = "subnet-00614134196ed093d"
-  user_data = <<EOF
+  user_data              = <<EOF
 #!/bin/bash
 
 apt-get update
@@ -78,7 +81,8 @@ sudo sed -i "s/$CUR_HOSTNAME/$NEW_HOSTNAME/g" /etc/hostname
 
 curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION=v1.23.9+k3s1 K3S_TOKEN=coIeS98V5UxzKYTLX0Uzzd4pkxfPSwBxiCUFtUm1sURd66mnZlT3uhk K3S_URL=https://${local.private_ip_master}:6443 sh -s - agent --node-ip $local_ip  --kubelet-arg="provider-id=aws:///$provider_id"
 EOF
+
   tags = {
-    "kubernetes.io/cluster/mycluster"   = "owned"   
+    "kubernetes.io/cluster/k3s-aadesh" = "owned"
   }
 }
