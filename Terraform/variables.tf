@@ -1,12 +1,3 @@
-# variable "WorkerCount"
-# {
-#     default = "2"
-# }
-# variable "MasterCount"
-# {
-#     default = "1"
-# }
-
 variable "k3s_inbound_ports" {
   type = list(
     object

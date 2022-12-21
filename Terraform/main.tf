@@ -1,8 +1,11 @@
 locals {
   private_ip_master = module.k3sMaster_instance.private_ip
+  MasterCount = 1
+  WorkerCount = 1
 }
 
 resource "aws_security_group" "k3s-sg" {
+
   name   = "aadesh-k3s-sg"
   vpc_id = "vpc-015507e5299f6073c"
   
@@ -29,6 +32,7 @@ resource "aws_security_group" "k3s-sg" {
 }
 
 module "k3sMaster_instance" {
+  # count = local.MasterCount
   source  = "terraform-aws-modules/ec2-instance/aws"
   version = "~> 3.0"
 
@@ -47,7 +51,7 @@ module "k3sMaster_instance" {
 }
 
 module "k3sWorker_instance" {
-  # count = var.MasterCount
+  # count = local.WorkerCount
   source  = "terraform-aws-modules/ec2-instance/aws"
   version = "~> 3.0"
 
