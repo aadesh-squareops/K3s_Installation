@@ -1,14 +1,16 @@
 locals {
   private_ip_master = module.k3sMaster_instance.private_ip
-  MasterCount = 1
-  WorkerCount = 1
+  MasterCount       = 1
+  WorkerCount       = 1
+  key               = "aadesh"
+  instance_type     = "t3a.medium"
 }
 
 resource "aws_security_group" "k3s-sg" {
 
   name   = "aadesh-k3s-sg"
   vpc_id = "vpc-015507e5299f6073c"
-  
+
   dynamic "ingress" {
     for_each = var.k3s_inbound_ports
     content {
@@ -20,10 +22,10 @@ resource "aws_security_group" "k3s-sg" {
   }
 
   egress {
-    from_port        = 0
-    to_port          = 0
-    protocol         = "-1"
-    cidr_blocks      = ["0.0.0.0/0"]
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   tags = {
@@ -39,14 +41,18 @@ module "k3sMaster_instance" {
   name = "aadesh-k3s-master"
 
   ami                    = "ami-0530ca8899fac469f"
-  instance_type          = "t3a.medium"
-  key_name               = "aadesh"
+  instance_type          = local.instance_type
+  key_name               = local.key
   monitoring             = true
   vpc_security_group_ids = [aws_security_group.k3s-sg.id]
   subnet_id              = "subnet-00614134196ed093d"
-  user_data              = file("k3s_Master.sh")
+  iam_instance_profile   = "aadesh-k3s-master-role"
+
+  user_data = file("k3s_Master.sh")
+
   tags = {
     "kubernetes.io/cluster/k3s-aadesh" = "owned"
+    Owner                              = "Aadesh"
   }
 }
 
@@ -58,12 +64,14 @@ module "k3sWorker_instance" {
   name = "aadesh-k3s-worker"
 
   ami                    = "ami-0530ca8899fac469f"
-  instance_type          = "t3a.medium"
-  key_name               = "aadesh"
+  instance_type          = local.instance_type
+  key_name               = local.key
   monitoring             = true
   vpc_security_group_ids = [aws_security_group.k3s-sg.id]
   subnet_id              = "subnet-00614134196ed093d"
-  user_data              = <<EOF
+  iam_instance_profile   = "aadesh-k3s-worker-role"
+
+  user_data = <<EOF
 #!/bin/bash
 
 apt-get update
@@ -88,5 +96,6 @@ EOF
 
   tags = {
     "kubernetes.io/cluster/k3s-aadesh" = "owned"
+    Owner                              = "Aadesh"
   }
 }
