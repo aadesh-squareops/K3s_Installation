@@ -15,7 +15,7 @@ Use this SG for Master as well for Workers
 Tag VPC, Subnets, SG & instance also which is to be used with Key: “kubernetes.io/cluster/mycluster” and Value: “owned”
 
 kubens- set namespace
-all subnet => kubernetes.io/cluster/eks-ayush = owned
+all subnet => kubernetes.io/cluster/k3s-aadesh = owned
 private-subnet => kubernetes.io/role/internal-elb = 1
 public subnet => kubernetes.io/role/elb =1
 
